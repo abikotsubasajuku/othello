@@ -19,7 +19,6 @@
   <script src="./data/history.js"></script>
   <script src="./data/idiom.js"></script>
   <script src="./data/math.js"></script>
-  <script src="./data/prefecture.js"></script>
 </head>
 <body>
   <div id="root"></div>
@@ -28,56 +27,57 @@
     const { useState, useEffect, useMemo } = React;
 
     const GENRES = {
-      kanji: { id: 'kanji', label: '漢字の読み', promptItem: '漢字（熟語や単語）', promptMeaning: 'ひらがなでの読み方', quizQuestion: 'この漢字の読み方は？' },
-      english: { id: 'english', label: '英単語', promptItem: '英単語', promptMeaning: '日本語訳', quizQuestion: 'この英単語の意味は？' },
-      element: { id: 'element', label: '元素記号', promptItem: '元素名（例: 水素、鉄）', promptMeaning: '元素記号（例: H, Fe）', quizQuestion: 'この元素の記号は？' },
-      capital: { id: 'capital', label: '世界の首都', promptItem: '国名', promptMeaning: 'その国の首都名', quizQuestion: 'この国の首都は？' },
-      history: { id: 'history', label: '歴史の年号', promptItem: '日本史や世界史の出来事（例: 大化の改新）', promptMeaning: '西暦の年号（数字と「年」のみ。例: 645年）', quizQuestion: 'この出来事が起きた年号は？' },
-      idiom: { id: 'idiom', label: '四字熟語', promptItem: '四字熟語', promptMeaning: 'その意味（簡潔に）', quizQuestion: 'この四字熟語の意味は？' },
-      math: { id: 'math', label: '計算問題', promptItem: '計算式（例: 12 × 3、150 ÷ 5 など）', promptMeaning: 'その答えの数値', quizQuestion: 'この計算の答えは？' },
-      prefecture: { id: 'prefecture', label: '県庁所在地', promptItem: '日本の都道府県名', promptMeaning: 'その県庁所在地名（市など）', quizQuestion: 'この都道府県の県庁所在地は？' }
+      kanji: { id: 'kanji', label: '漢字の読み', promptItem: '漢字', promptMeaning: 'ひらがなでの読み方', quizQuestion: 'この漢字の読み方は？' },
+      english: { id: 'english', label: '英単語', promptItem: '英単語・熟語', promptMeaning: '日本語訳', quizQuestion: 'この英単語・熟語の意味は？' },
+      element: { id: 'element', label: '理科', promptItem: '理科の問題', promptMeaning: '答え', quizQuestion: 'この問題の答えは？' },
+      capital: { id: 'capital', label: '地理', promptItem: '地理の問題', promptMeaning: '答え', quizQuestion: 'この問題の答えは？' },
+      history: { id: 'history', label: '歴史', promptItem: '歴史の問題', promptMeaning: '答え', quizQuestion: 'この問題の答えは？' },
+      idiom: { id: 'idiom', label: '四字熟語・ことわざ', promptItem: '四字熟語・ことわざ・慣用句', promptMeaning: '意味・答え', quizQuestion: 'この言葉の意味・答えは？' },
+      math: { id: 'math', label: '数学', promptItem: '数学の問題', promptMeaning: '答え', quizQuestion: 'この問題の答えは？' }
     };
 
     const LEVELS = {
       kanji: [
-        { label: '初級 (漢検5級〜4級)', value: '漢検5級から漢検4級レベル' },
-        { label: '中級 (漢検3級〜準2級)', value: '漢検3級から漢検準2級レベル' },
-        { label: '上級 (漢検2級〜準1級)', value: '漢検2級から漢検準1級レベル' }
+        { label: '初級 (漢検5級〜4級)', value: 'easy' },
+        { label: '中級 (漢検3級〜準2級)', value: 'normal' },
+        { label: '上級 (漢検2級〜1級)', value: 'hard' },
+        { label: 'ランダム', value: 'random' }
       ],
       english: [
-        { label: '初級 (英検4級)', value: '英検4級レベル' },
-        { label: '中級 (英検3級)', value: '英検3級レベル' },
-        { label: '上級 (英検準2級)', value: '英検準2級レベル' }
+        { label: '初級 (英検5級〜4級)', value: 'easy' },
+        { label: '中級 (英検3級〜準2級)', value: 'normal' },
+        { label: '上級 (英検2級〜1級)', value: 'hard' },
+        { label: 'ランダム', value: 'random' }
       ],
       element: [
-        { label: '初級 (有名な元素)', value: '中学理科で習う有名な元素' },
-        { label: '中級 (標準的な元素)', value: '高校化学で習う元素' },
-        { label: '上級 (マニアックな元素)', value: '周期表のマイナーな元素' }
+        { label: '初級 (小学校〜中学基礎)', value: 'easy' },
+        { label: '中級 (中学標準〜高校基礎)', value: 'normal' },
+        { label: '上級 (高校標準・発展)', value: 'hard' },
+        { label: 'ランダム', value: 'random' }
       ],
       capital: [
-        { label: '初級 (有名な国)', value: '世界的に有名な主要国の首都' },
-        { label: '中級 (標準的な国)', value: 'ニュースでよく聞く国の首都' },
-        { label: '上級 (マニアックな国)', value: '少しマイナーな国の首都' }
+        { label: '初級 (小学校〜中学基礎)', value: 'easy' },
+        { label: '中級 (中学標準〜高校基礎)', value: 'normal' },
+        { label: '上級 (高校標準・発展)', value: 'hard' },
+        { label: 'ランダム', value: 'random' }
       ],
       history: [
-        { label: '初級 (中学歴史)', value: '中学歴史で必ず習う重要な出来事' },
-        { label: '中級 (高校日本史)', value: '高校日本史の標準レベルの出来事' },
-        { label: '上級 (難関大レベル)', value: '大学受験レベルのやや細かい出来事' }
+        { label: '初級 (中学基礎)', value: 'easy' },
+        { label: '中級 (中学標準〜高校基礎)', value: 'normal' },
+        { label: '上級 (高校標準・発展)', value: 'hard' },
+        { label: 'ランダム', value: 'random' }
       ],
       idiom: [
-        { label: '初級 (よく使う四字熟語)', value: '日常会話でよく使われる四字熟語' },
-        { label: '中級 (標準的な四字熟語)', value: '漢検3級程度の標準的な四字熟語' },
-        { label: '上級 (難関な四字熟語)', value: '漢検2級以上のやや難しい四字熟語' }
+        { label: '初級 (よく使う表現)', value: 'easy' },
+        { label: '中級 (標準的な表現)', value: 'normal' },
+        { label: '上級 (難しい表現)', value: 'hard' },
+        { label: 'ランダム', value: 'random' }
       ],
       math: [
-        { label: '初級 (簡単な計算)', value: '九九や2桁の簡単な足し算・引き算' },
-        { label: '中級 (2桁の掛け算など)', value: '2桁×1桁や簡単な割り算' },
-        { label: '上級 (複雑な計算)', value: '2桁×2桁や少し複雑な四則演算' }
-      ],
-      prefecture: [
-        { label: '初級 (北海道・関東など)', value: '北海道や関東地方、近畿地方の都道府県' },
-        { label: '中級 (県名と異なる)', value: '都道府県名と県庁所在地名が異なる県' },
-        { label: '上級 (全国ランダム)', value: '日本全国の都道府県からランダム' }
+        { label: '初級 (基礎〜中1)', value: 'easy' },
+        { label: '中級 (中学標準〜入試)', value: 'normal' },
+        { label: '上級 (高校数学含む)', value: 'hard' },
+        { label: 'ランダム', value: 'random' }
       ]
     };
 
@@ -255,6 +255,34 @@
     const FALLBACK_DATA = window.OTHELLO_QUESTION_DATA || {};
     const DEFAULT_MATH_DATA = flattenQuestionData(FALLBACK_DATA.math || []);
 
+    
+    function shuffleArray(array) {
+      const copied = [...array];
+      for (let i = copied.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copied[i], copied[j]] = [copied[j], copied[i]];
+      }
+      return copied;
+    }
+
+    function getQuestionDataByLevel(genreId, levelValue) {
+      const allData = window.OTHELLO_QUESTION_DATA || {};
+      const genreData = allData[genreId] || {};
+
+      if (Array.isArray(genreData)) return shuffleArray(genreData);
+
+      const easyData = Array.isArray(genreData.easy) ? genreData.easy : [];
+      const normalData = Array.isArray(genreData.normal) ? genreData.normal : [];
+      const hardData = Array.isArray(genreData.hard) ? genreData.hard : [];
+
+      if (levelValue === 'random') {
+        return shuffleArray([...easyData, ...normalData, ...hardData]);
+      }
+
+      const selected = Array.isArray(genreData[levelValue]) ? genreData[levelValue] : [];
+      return shuffleArray(selected.length ? selected : [...easyData, ...normalData, ...hardData]);
+    }
+
     const DIRECTIONS = [
       [-1, -1], [-1, 0], [-1, 1],
       [ 0, -1],          [ 0, 1],
@@ -426,15 +454,16 @@
       const handleStart = async () => {
         setIsGeneratingTheme(true);
         try {
-          const words = await generateThemeWords(genre, level, "");
-          const levelLabel = LEVELS[genre].find(l => l.value === level).label;
-          setCurrentThemeName(`🎲 ${GENRES[genre].label} - ${levelLabel}`);
+          const words = getQuestionDataByLevel(genre, level);
+          if (!words || words.length === 0) {
+            throw new Error("問題データが見つかりません。");
+          }
+          const levelLabel = LEVELS[genre].find(l => l.value === level)?.label || 'ランダム';
+          setCurrentThemeName(`${GENRES[genre].label} - ${levelLabel}`);
           initializeBoard(words, genre);
         } catch (error) {
-          console.error("Theme generation error:", error);
-          alert("問題の準備に失敗しました。予備の標準データで開始します。");
-          setCurrentThemeName(`標準データ (${GENRES[genre].label})`);
-          initializeBoard(getDataForLevel(genre, level), genre);
+          console.error("Question data error:", error);
+          alert("問題データの読み込みに失敗しました。dataフォルダ内のJSファイルを確認してください。");
         } finally {
           setIsGeneratingTheme(false);
         }
@@ -630,7 +659,7 @@
                   {isGeneratingTheme ? (
                     <>
                       <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                      盤面を生成中...
+                      盤面を作成中...
                     </>
                   ) : "ゲーム開始！"}
                 </button>
