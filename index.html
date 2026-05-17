@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>学習リバーシ</title>
+  <title>クイズオセロ</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- React & ReactDOM -->
@@ -19,6 +19,7 @@
   <script src="./data/history.js"></script>
   <script src="./data/idiom.js"></script>
   <script src="./data/math.js"></script>
+  <script src="./data/trivia.js"></script>
 <link rel="icon" href="data:,">
 </head>
 <body>
@@ -35,7 +36,8 @@
       history: { id: 'history', label: '歴史', promptItem: '歴史の問題', promptMeaning: '答え', quizQuestion: 'この問題の答えは？' },
       idiom: { id: 'idiom', label: '四字熟語・ことわざ', promptItem: '四字熟語・ことわざ・慣用句', promptMeaning: '意味・答え', quizQuestion: 'この言葉の意味・答えは？' },
       math: { id: 'math', label: '数学', promptItem: '数学の問題', promptMeaning: '答え', quizQuestion: 'この問題の答えは？' },
-      genreRandom: { id: 'genreRandom', label: 'ジャンルランダム', promptItem: 'ランダム問題', promptMeaning: '答え', quizQuestion: 'この問題の答えは？' }
+      genreRandom: { id: 'genreRandom', label: 'ジャンルランダム', promptItem: 'ランダム問題', promptMeaning: '答え', quizQuestion: 'この問題の答えは？' },
+      trivia: { id: 'trivia', label: '雑学', promptItem: '雑学の問題', promptMeaning: '答え', quizQuestion: 'この雑学の答えは？' }
     };
 
     const LEVELS = {
@@ -86,6 +88,12 @@
         { label: '中級ランダム', value: 'normal' },
         { label: '上級ランダム', value: 'hard' },
         { label: '全レベルランダム', value: 'random' }
+      ],
+      trivia: [
+        { label: '初級 (身近な雑学)', value: 'easy' },
+        { label: '中級 (標準的な雑学)', value: 'normal' },
+        { label: '上級 (難しめの雑学)', value: 'hard' },
+        { label: 'ランダム', value: 'random' }
       ]
     };
 
@@ -273,7 +281,7 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
 
     function getQuestionDataByLevel(genreId, levelValue) {
       const allData = window.OTHELLO_QUESTION_DATA || {};
-      const playableGenres = ['kanji', 'english', 'element', 'capital', 'history', 'idiom', 'math'];
+      const playableGenres = ['kanji', 'english', 'element', 'capital', 'history', 'idiom', 'math', 'trivia'];
 
       if (genreId === 'genreRandom') {
         const collected = [];
@@ -640,7 +648,7 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
         return (
           <div className="min-h-screen bg-stone-100 flex flex-col items-center justify-center p-4 font-sans text-stone-800">
             <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-2xl max-w-md w-full border-4 border-stone-600">
-              <h1 className="text-3xl sm:text-4xl font-black text-center text-stone-900 mb-2">学習リバーシ</h1>
+              <h1 className="text-3xl sm:text-4xl font-black text-center text-stone-900 mb-2">クイズオセロ</h1>
               <p className="text-center text-stone-600 font-bold mb-6">遊びながら知識を高めよう！</p>
               
               <div className="mb-6 flex flex-col gap-4 bg-stone-100 p-3 rounded-lg border-2 border-stone-300">
@@ -747,7 +755,7 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
               ← メニュー
             </button>
             <h1 className="text-2xl font-black text-center text-stone-900 mb-1 mt-2 tracking-wider">
-              学習リバーシ
+              クイズオセロ
             </h1>
             <p className="text-center text-xs text-stone-600 font-bold mb-4">
               {currentThemeName}
