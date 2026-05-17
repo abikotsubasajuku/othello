@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>クイズオセロ</title>
+  <title>学習リバーシ</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- React & ReactDOM -->
@@ -301,6 +301,8 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
           source.forEach((q) => {
             collected.push({
               ...q,
+              genreId: id,
+              genreLabel,
               word: `【${genreLabel}】${q.word}`
             });
           });
@@ -408,23 +410,45 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
     }
 
     function generateOptions(correctItem, allCurrentWords) {
+      // ジャンルランダム時は、正解と同じジャンルからダミー選択肢を出す
+      // 例：理科の問題なら、三択の他の選択肢も理科から選ぶ
       let candidates = allCurrentWords.filter(item => item.word !== correctItem.word);
-      
+
+      if (correctItem.genreId) {
+        const sameGenreCandidates = candidates.filter(item => item.genreId === correctItem.genreId);
+        if (sameGenreCandidates.length >= 2) {
+          candidates = sameGenreCandidates;
+        }
+      }
+
+      candidates = candidates.filter(item => item.meaning !== correctItem.meaning);
+
       candidates.forEach(item => {
         let score = 0;
         const lengthDiff = Math.abs(item.meaning.length - correctItem.meaning.length);
-        score -= lengthDiff * 5; 
-        
+        score -= lengthDiff * 5;
+
         const wordLengthDiff = Math.abs(item.word.length - correctItem.word.length);
         score -= wordLengthDiff * 3;
-        
+
         item._score = score;
       });
 
       candidates.sort((a, b) => b._score - a._score);
-      
-      const topCandidates = candidates.slice(0, 10).sort(() => Math.random() - 0.5);
-      const dummies = topCandidates.slice(0, 2);
+
+      const topCandidates = candidates.slice(0, 12).sort(() => Math.random() - 0.5);
+      let dummies = topCandidates.slice(0, 2);
+
+      // 同ジャンルで2つ取れない場合だけ、全体から補充
+      if (dummies.length < 2) {
+        const usedMeanings = new Set([correctItem.meaning, ...dummies.map(item => item.meaning)]);
+        const fallback = allCurrentWords
+          .filter(item => item.word !== correctItem.word)
+          .filter(item => !usedMeanings.has(item.meaning))
+          .sort(() => Math.random() - 0.5);
+
+        dummies = [...dummies, ...fallback.slice(0, 2 - dummies.length)];
+      }
 
       const options = [correctItem, ...dummies].map(item => item.meaning);
       return options.sort(() => Math.random() - 0.5);
@@ -616,7 +640,7 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
         return (
           <div className="min-h-screen bg-stone-100 flex flex-col items-center justify-center p-4 font-sans text-stone-800">
             <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-2xl max-w-md w-full border-4 border-stone-600">
-              <h1 className="text-3xl sm:text-4xl font-black text-center text-stone-900 mb-2">クイズオセロ</h1>
+              <h1 className="text-3xl sm:text-4xl font-black text-center text-stone-900 mb-2">学習リバーシ</h1>
               <p className="text-center text-stone-600 font-bold mb-6">遊びながら知識を高めよう！</p>
               
               <div className="mb-6 flex flex-col gap-4 bg-stone-100 p-3 rounded-lg border-2 border-stone-300">
@@ -723,7 +747,7 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
               ← メニュー
             </button>
             <h1 className="text-2xl font-black text-center text-stone-900 mb-1 mt-2 tracking-wider">
-              クイズオセロ
+              学習リバーシ
             </h1>
             <p className="text-center text-xs text-stone-600 font-bold mb-4">
               {currentThemeName}
