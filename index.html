@@ -34,7 +34,8 @@
       capital: { id: 'capital', label: '地理', promptItem: '地理の問題', promptMeaning: '答え', quizQuestion: 'この問題の答えは？' },
       history: { id: 'history', label: '歴史', promptItem: '歴史の問題', promptMeaning: '答え', quizQuestion: 'この問題の答えは？' },
       idiom: { id: 'idiom', label: '四字熟語・ことわざ', promptItem: '四字熟語・ことわざ・慣用句', promptMeaning: '意味・答え', quizQuestion: 'この言葉の意味・答えは？' },
-      math: { id: 'math', label: '数学', promptItem: '数学の問題', promptMeaning: '答え', quizQuestion: 'この問題の答えは？' }
+      math: { id: 'math', label: '数学', promptItem: '数学の問題', promptMeaning: '答え', quizQuestion: 'この問題の答えは？' },
+      genreRandom: { id: 'genreRandom', label: 'ジャンルランダム', promptItem: 'ランダム問題', promptMeaning: '答え', quizQuestion: 'この問題の答えは？' }
     };
 
     const LEVELS = {
@@ -79,6 +80,12 @@
         { label: '中級 (中学標準〜入試)', value: 'normal' },
         { label: '上級 (高校数学含む)', value: 'hard' },
         { label: 'ランダム', value: 'random' }
+      ],
+      genreRandom: [
+        { label: '初級ランダム', value: 'easy' },
+        { label: '中級ランダム', value: 'normal' },
+        { label: '上級ランダム', value: 'hard' },
+        { label: '全レベルランダム', value: 'random' }
       ]
     };
 
@@ -266,6 +273,42 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
 
     function getQuestionDataByLevel(genreId, levelValue) {
       const allData = window.OTHELLO_QUESTION_DATA || {};
+      const playableGenres = ['kanji', 'english', 'element', 'capital', 'history', 'idiom', 'math'];
+
+      if (genreId === 'genreRandom') {
+        const collected = [];
+
+        playableGenres.forEach((id) => {
+          const genreData = allData[id] || {};
+          const genreLabel = GENRES[id]?.label || id;
+
+          let source = [];
+          if (Array.isArray(genreData)) {
+            source = genreData;
+          } else {
+            const easyData = Array.isArray(genreData.easy) ? genreData.easy : [];
+            const normalData = Array.isArray(genreData.normal) ? genreData.normal : [];
+            const hardData = Array.isArray(genreData.hard) ? genreData.hard : [];
+
+            if (levelValue === 'random') {
+              source = [...easyData, ...normalData, ...hardData];
+            } else {
+              source = Array.isArray(genreData[levelValue]) ? genreData[levelValue] : [];
+              if (source.length === 0) source = [...easyData, ...normalData, ...hardData];
+            }
+          }
+
+          source.forEach((q) => {
+            collected.push({
+              ...q,
+              word: `【${genreLabel}】${q.word}`
+            });
+          });
+        });
+
+        return shuffleArrayUnique(collected);
+      }
+
       const genreData = allData[genreId] || {};
 
       if (Array.isArray(genreData)) return shuffleArrayUnique(genreData);
