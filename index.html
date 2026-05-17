@@ -89,8 +89,7 @@
     // - Gemini APIや外部AIは使いません
     // - data/各ジャンル.js の難易度別データを読み込み、計算問題は毎回ランダム生成します
     // ==========================================
-    const shuffleArray = (array) => [...array].sort(() => Math.random() - 0.5);
-    const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
+const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
 
     const normalizeWordItem = (item) => ({
       word: String(item.word ?? ""),
@@ -162,7 +161,7 @@
 
       const result = [];
       while (result.length < count) {
-        const shuffled = shuffleArray(pool);
+        const shuffled = shuffleArrayUnique(pool);
         for (const item of shuffled) {
           if (result.length >= count) break;
           result.push({ ...item });
@@ -256,8 +255,7 @@
     const FALLBACK_DATA = window.OTHELLO_QUESTION_DATA || {};
     const DEFAULT_MATH_DATA = flattenQuestionData(FALLBACK_DATA.math || []);
 
-    
-    function shuffleArray(array) {
+    function shuffleArrayUnique(array) {
       const copied = [...array];
       for (let i = copied.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -270,18 +268,18 @@
       const allData = window.OTHELLO_QUESTION_DATA || {};
       const genreData = allData[genreId] || {};
 
-      if (Array.isArray(genreData)) return shuffleArray(genreData);
+      if (Array.isArray(genreData)) return shuffleArrayUnique(genreData);
 
       const easyData = Array.isArray(genreData.easy) ? genreData.easy : [];
       const normalData = Array.isArray(genreData.normal) ? genreData.normal : [];
       const hardData = Array.isArray(genreData.hard) ? genreData.hard : [];
 
       if (levelValue === 'random') {
-        return shuffleArray([...easyData, ...normalData, ...hardData]);
+        return shuffleArrayUnique([...easyData, ...normalData, ...hardData]);
       }
 
       const selected = Array.isArray(genreData[levelValue]) ? genreData[levelValue] : [];
-      return shuffleArray(selected.length ? selected : [...easyData, ...normalData, ...hardData]);
+      return shuffleArrayUnique(selected.length ? selected : [...easyData, ...normalData, ...hardData]);
     }
 
     const DIRECTIONS = [
