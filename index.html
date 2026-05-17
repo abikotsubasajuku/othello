@@ -11,8 +11,15 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
   <!-- Babel (for JSX) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <!-- 問題データ（ここを編集すれば問題だけ差し替えできます） -->
-  <script src="./data/questions.js"></script>
+  <!-- 問題データ（ジャンルごとに編集できます） -->
+  <script src="./data/kanji.js"></script>
+  <script src="./data/english.js"></script>
+  <script src="./data/element.js"></script>
+  <script src="./data/capital.js"></script>
+  <script src="./data/history.js"></script>
+  <script src="./data/idiom.js"></script>
+  <script src="./data/math.js"></script>
+  <script src="./data/prefecture.js"></script>
 </head>
 <body>
   <div id="root"></div>
@@ -28,8 +35,7 @@
       history: { id: 'history', label: '歴史の年号', promptItem: '日本史や世界史の出来事（例: 大化の改新）', promptMeaning: '西暦の年号（数字と「年」のみ。例: 645年）', quizQuestion: 'この出来事が起きた年号は？' },
       idiom: { id: 'idiom', label: '四字熟語', promptItem: '四字熟語', promptMeaning: 'その意味（簡潔に）', quizQuestion: 'この四字熟語の意味は？' },
       math: { id: 'math', label: '計算問題', promptItem: '計算式（例: 12 × 3、150 ÷ 5 など）', promptMeaning: 'その答えの数値', quizQuestion: 'この計算の答えは？' },
-      prefecture: { id: 'prefecture', label: '県庁所在地', promptItem: '日本の都道府県名', promptMeaning: 'その県庁所在地名（市など）', quizQuestion: 'この都道府県の県庁所在地は？' },
-      free: { id: 'free', label: 'その他 (自由作成)', promptItem: 'キーワード（短め）', promptMeaning: 'その意味や関連する答え', quizQuestion: 'このキーワードの答え・意味は？' }
+      prefecture: { id: 'prefecture', label: '県庁所在地', promptItem: '日本の都道府県名', promptMeaning: 'その県庁所在地名（市など）', quizQuestion: 'この都道府県の県庁所在地は？' }
     };
 
     const LEVELS = {
@@ -72,11 +78,6 @@
         { label: '初級 (北海道・関東など)', value: '北海道や関東地方、近畿地方の都道府県' },
         { label: '中級 (県名と異なる)', value: '都道府県名と県庁所在地名が異なる県' },
         { label: '上級 (全国ランダム)', value: '日本全国の都道府県からランダム' }
-      ],
-      free: [
-        { label: '初級 (有名・基本)', value: '誰でも知っている有名なレベル' },
-        { label: '中級 (標準的)', value: '一般的な知識レベル' },
-        { label: '上級 (マニアック)', value: '知る人ぞ知るマニアックなレベル' }
       ]
     };
 
@@ -85,7 +86,7 @@
     // ==========================================
     // ローカル問題生成（API不要）
     // - Gemini APIや外部AIは使いません
-    // - data/questions.js の問題データを読み込み、計算問題は毎回ランダム生成します
+    // - data/各ジャンル.js の難易度別データを読み込み、計算問題は毎回ランダム生成します
     // ==========================================
     const shuffleArray = (array) => [...array].sort(() => Math.random() - 0.5);
     const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
@@ -117,6 +118,27 @@
       return [1, 5];
     };
 
+    const getLevelKey = (genreId, levelValue) => {
+      const index = (LEVELS[genreId] || []).findIndex(item => item.value === levelValue);
+      if (index === 0) return 'easy';
+      if (index === 1) return 'normal';
+      if (index === 2) return 'hard';
+      return 'easy';
+    };
+
+    const flattenQuestionData = (data) => {
+      if (Array.isArray(data)) return data;
+      if (!data || typeof data !== 'object') return [];
+      return Object.values(data).flatMap(value => Array.isArray(value) ? value : []);
+    };
+
+    const getDataForLevel = (genreId, levelValue) => {
+      const genreData = FALLBACK_DATA[genreId] || [];
+      if (Array.isArray(genreData)) return genreData;
+      const levelKey = getLevelKey(genreId, levelValue);
+      return genreData[levelKey] || flattenQuestionData(genreData);
+    };
+
     const filterByTheme = (items, theme) => {
       const keyword = (theme || '').trim().toLowerCase();
       if (!keyword) return items;
@@ -135,6 +157,7 @@
       // 優先順位：テーマ一致 → レベル一致 → 全データ
       let pool = uniqueWordItems([...themeFiltered, ...levelFiltered, ...normalized]);
       if (pool.length === 0) pool = normalized;
+      if (pool.length === 0) return [];
 
       const result = [];
       while (result.length < count) {
@@ -218,10 +241,11 @@
       await new Promise(resolve => setTimeout(resolve, 200));
 
       if (genreId === 'math') {
-        return createLocalMathData(level, customTheme, 64);
+        const baseData = getDataForLevel(genreId, level);
+        return buildLocalData([...baseData, ...createLocalMathData(level, customTheme, 64)], level, customTheme, 64);
       }
 
-      const baseData = FALLBACK_DATA[genreId] || DEFAULT_FREE_DATA;
+      const baseData = getDataForLevel(genreId, level);
       return buildLocalData(baseData, level, customTheme, 64);
     };
 
@@ -229,8 +253,7 @@
     // デフォルトデータ (AI生成失敗時の予備データ)
     // ==========================================
     const FALLBACK_DATA = window.OTHELLO_QUESTION_DATA || {};
-    const DEFAULT_MATH_DATA = FALLBACK_DATA.math || [];
-    const DEFAULT_FREE_DATA = FALLBACK_DATA.free || [];
+    const DEFAULT_MATH_DATA = flattenQuestionData(FALLBACK_DATA.math || []);
 
     const DIRECTIONS = [
       [-1, -1], [-1, 0], [-1, 1],
@@ -357,42 +380,25 @@
       const [currentGenre, setCurrentGenre] = useState('kanji'); // プレイ中のジャンル
       const [currentThemeName, setCurrentThemeName] = useState("");
 
-      const [themeInput, setThemeInput] = useState(""); 
       const [isGeneratingTheme, setIsGeneratingTheme] = useState(false);
       const [quizModal, setQuizModal] = useState(null); 
       const [toastMessage, setToastMessage] = useState("");
 
-      // ジャンル変更時にレベルの選択肢と自由入力をリセット
+      // ジャンル変更時にレベルの選択肢をリセット
       useEffect(() => {
         setLevel(LEVELS[genre][0].value);
-        setThemeInput(""); 
       }, [genre]);
-
-      const getPlaceholder = (g) => {
-        switch (g) {
-          case 'kanji': return "自由入力 (例: 動物, 四字熟語)";
-          case 'english': return "自由入力 (例: IT, 宇宙)";
-          case 'element': return "自由入力 (例: 金属, ハロゲン)";
-          case 'capital': return "自由入力 (例: アジア, ヨーロッパ)";
-          case 'history': return "自由入力 (例: 戦国時代, 江戸時代)";
-          case 'idiom': return "自由入力 (例: 数字を含む, 動物を含む)";
-          case 'math': return "自由入力 (例: 掛け算, 分数)";
-          case 'prefecture': return "自由入力 (例: 九州地方, 関東地方)";
-          case 'free': return "自由入力 (例: アニメキャラ, プログラミング)";
-          default: return "自由入力";
-        }
-      };
 
       const initializeBoard = (wordDataList, targetGenre) => {
         setPlayMode(menuMode);
         setActiveCpuLevel(cpuLevel);
         setCurrentGenre(targetGenre);
         
-        const fallbackData = FALLBACK_DATA[targetGenre];
+        const fallbackData = getDataForLevel(targetGenre, level) || [];
         let shuffledData = [...wordDataList].sort(() => Math.random() - 0.5);
         
         // 足りない分はフォールバックデータから補充
-        while (shuffledData.length < 64) {
+        while (shuffledData.length > 0 && shuffledData.length < 64) {
           shuffledData = [...shuffledData, ...fallbackData].sort(() => Math.random() - 0.5);
         }
         shuffledData = shuffledData.slice(0, 64);
@@ -420,16 +426,15 @@
       const handleStart = async () => {
         setIsGeneratingTheme(true);
         try {
-          const words = await generateThemeWords(genre, level, themeInput);
-          const isCustom = themeInput.trim().length > 0;
-          const levelLabel = isCustom ? themeInput.trim() : LEVELS[genre].find(l => l.value === level).label;
+          const words = await generateThemeWords(genre, level, "");
+          const levelLabel = LEVELS[genre].find(l => l.value === level).label;
           setCurrentThemeName(`🎲 ${GENRES[genre].label} - ${levelLabel}`);
           initializeBoard(words, genre);
         } catch (error) {
           console.error("Theme generation error:", error);
           alert("問題の準備に失敗しました。予備の標準データで開始します。");
           setCurrentThemeName(`標準データ (${GENRES[genre].label})`);
-          initializeBoard(FALLBACK_DATA[genre], genre);
+          initializeBoard(getDataForLevel(genre, level), genre);
         } finally {
           setIsGeneratingTheme(false);
         }
@@ -584,7 +589,7 @@
 
               <div className="bg-stone-50 p-4 sm:p-6 rounded-2xl border-2 border-stone-200 mb-4">
                 <h2 className="text-lg font-bold text-stone-800 mb-4 flex items-center justify-center gap-2">
-                  <span className="text-2xl">✨</span> AI問題生成
+                  <span className="text-2xl">✨</span> 問題自動生成
                 </h2>
                 
                 <div className="mb-6">
@@ -603,28 +608,17 @@
                 </div>
 
                 <div className="mb-6">
-                  <p className="font-bold text-stone-600 text-sm mb-2 text-center">レベル・テーマを選択</p>
+                  <p className="font-bold text-stone-600 text-sm mb-2 text-center">レベルを選択</p>
                   <div className="flex flex-col gap-2 items-center">
                     {LEVELS[genre].map(lvl => (
-                      <label key={lvl.value} className={`flex items-center cursor-pointer w-full max-w-[280px] p-2 rounded-lg border transition-colors ${!themeInput.trim() && level === lvl.value ? 'bg-amber-50 border-amber-400' : 'bg-white border-stone-300 hover:bg-stone-100'}`}>
+                      <label key={lvl.value} className={`flex items-center cursor-pointer w-full max-w-[280px] p-2 rounded-lg border transition-colors ${level === lvl.value ? 'bg-amber-50 border-amber-400' : 'bg-white border-stone-300 hover:bg-stone-100'}`}>
                         <input 
-                          type="radio" value={lvl.value} checked={!themeInput.trim() && level === lvl.value} onChange={(e) => {setLevel(e.target.value); setThemeInput("");}}
+                          type="radio" value={lvl.value} checked={level === lvl.value} onChange={(e) => setLevel(e.target.value)}
                           className="mr-2 w-4 h-4 text-amber-600 focus:ring-amber-500"
                         />
                         <span className="font-bold text-stone-700 text-xs sm:text-sm">{lvl.label}</span>
                       </label>
                     ))}
-                    
-                    <div className="w-full max-w-[280px] mt-2">
-                      <input 
-                        type="text" 
-                        value={themeInput}
-                        onChange={(e) => setThemeInput(e.target.value)}
-                        placeholder={getPlaceholder(genre)}
-                        className={`w-full p-2 pl-3 text-xs sm:text-sm font-bold text-stone-700 rounded-lg border-2 focus:outline-none transition-colors ${themeInput.trim() ? 'bg-amber-50 border-amber-400' : 'bg-white border-stone-300 focus:border-amber-400'}`}
-                        disabled={isGeneratingTheme}
-                      />
-                    </div>
                   </div>
                 </div>
 
