@@ -283,56 +283,51 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
       const allData = window.OTHELLO_QUESTION_DATA || {};
       const playableGenres = ['kanji', 'english', 'element', 'capital', 'history', 'idiom', 'math', 'trivia'];
 
+      function normalizeQuestions(source, id, withPrefix = false) {
+        const genreLabel = GENRES[id]?.label || id;
+        return source.map(q => ({
+          ...q,
+          genreId: id,
+          genreLabel,
+          word: withPrefix ? `【${genreLabel}】${q.word}` : q.word
+        }));
+      }
+
+      function pickByLevel(id, level) {
+        const genreData = allData[id] || {};
+
+        if (Array.isArray(genreData)) return normalizeQuestions(genreData, id);
+
+        const easyData = Array.isArray(genreData.easy) ? genreData.easy : [];
+        const normalData = Array.isArray(genreData.normal) ? genreData.normal : [];
+        const hardData = Array.isArray(genreData.hard) ? genreData.hard : [];
+
+        if (level === 'random') {
+          return normalizeQuestions([...easyData, ...normalData, ...hardData], id);
+        }
+
+        const selected = Array.isArray(genreData[level]) ? genreData[level] : [];
+        return normalizeQuestions(selected.length ? selected : [...easyData, ...normalData, ...hardData], id);
+      }
+
       if (genreId === 'genreRandom') {
         const collected = [];
-
-        playableGenres.forEach((id) => {
-          const genreData = allData[id] || {};
+        playableGenres.forEach(id => {
+          const items = pickByLevel(id, levelValue);
           const genreLabel = GENRES[id]?.label || id;
-
-          let source = [];
-          if (Array.isArray(genreData)) {
-            source = genreData;
-          } else {
-            const easyData = Array.isArray(genreData.easy) ? genreData.easy : [];
-            const normalData = Array.isArray(genreData.normal) ? genreData.normal : [];
-            const hardData = Array.isArray(genreData.hard) ? genreData.hard : [];
-
-            if (levelValue === 'random') {
-              source = [...easyData, ...normalData, ...hardData];
-            } else {
-              source = Array.isArray(genreData[levelValue]) ? genreData[levelValue] : [];
-              if (source.length === 0) source = [...easyData, ...normalData, ...hardData];
-            }
-          }
-
-          source.forEach((q) => {
+          items.forEach(q => {
             collected.push({
               ...q,
               genreId: id,
               genreLabel,
-              word: `【${genreLabel}】${q.word}`
+              word: `【${genreLabel}】${String(q.word).replace(/^【[^】]+】/, '')}`
             });
           });
         });
-
         return shuffleArrayUnique(collected);
       }
 
-      const genreData = allData[genreId] || {};
-
-      if (Array.isArray(genreData)) return shuffleArrayUnique(genreData);
-
-      const easyData = Array.isArray(genreData.easy) ? genreData.easy : [];
-      const normalData = Array.isArray(genreData.normal) ? genreData.normal : [];
-      const hardData = Array.isArray(genreData.hard) ? genreData.hard : [];
-
-      if (levelValue === 'random') {
-        return shuffleArrayUnique([...easyData, ...normalData, ...hardData]);
-      }
-
-      const selected = Array.isArray(genreData[levelValue]) ? genreData[levelValue] : [];
-      return shuffleArrayUnique(selected.length ? selected : [...easyData, ...normalData, ...hardData]);
+      return shuffleArrayUnique(pickByLevel(genreId, levelValue));
     }
 
     const DIRECTIONS = [
@@ -417,44 +412,139 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
       }
     }
 
-    function generateOptions(correctItem, allCurrentWords) {
-      // ジャンルランダム時は、正解と同じジャンルからダミー選択肢を出す
-      // 例：理科の問題なら、三択の他の選択肢も理科から選ぶ
-      let candidates = allCurrentWords.filter(item => item.word !== correctItem.word);
+    function getQuestionCategory(item) {
+      const rawWord = String(item.word || '').replace(/^【[^】]+】/, '');
+      const answer = String(item.meaning || '');
+      const text = `${rawWord} ${answer}`;
 
-      if (correctItem.genreId) {
-        const sameGenreCandidates = candidates.filter(item => item.genreId === correctItem.genreId);
-        if (sameGenreCandidates.length >= 2) {
-          candidates = sameGenreCandidates;
-        }
+      // 数学：答えの種類まで分ける
+      if (item.genreId === 'math' || /[0-9xπ√+\-×÷=^]|微分|積分|関数|方程式|確率|面積|体積|角|数列|log|sin|cos|tan|C|P/.test(text)) {
+        if (/微分|積分|∫/.test(text)) return 'math_calculus';
+        if (/sin|cos|tan|三角/.test(text)) return 'math_trig';
+        if (/log|指数|[0-9]\^/.test(text)) return 'math_log_exp';
+        if (/数列|等差|等比/.test(text)) return 'math_sequence';
+        if (/C[0-9]|P[0-9]|確率|赤.*青/.test(text)) return 'math_probability';
+        if (/因数分解|x\^2|二次|頂点/.test(text)) return 'math_quadratic';
+        if (/連立|2点|直線|傾き|切片|y=/.test(text)) return 'math_function';
+        if (/√|平方根/.test(text)) return 'math_root';
+        if (/面積|体積|角|三角形|円|球/.test(text)) return 'math_geometry';
+        if (/x/.test(text)) return 'math_equation';
+        return 'math_arithmetic';
       }
 
-      candidates = candidates.filter(item => item.meaning !== correctItem.meaning);
+      // 英語：単語・熟語
+      if (item.genreId === 'english' || /^[A-Za-z][A-Za-z\s\-']*$/.test(rawWord)) {
+        if (rawWord.trim().includes(' ')) return 'english_phrase';
+        return 'english_word';
+      }
 
-      candidates.forEach(item => {
+      // 漢字
+      if (item.genreId === 'kanji') {
+        if (/ことわざ|四字熟語|熟語/.test(text)) return 'kanji_idiom';
+        return 'kanji_reading';
+      }
+
+      // 四字熟語・ことわざ
+      if (item.genreId === 'idiom' || /四字熟語|ことわざ|慣用句|意味|表す/.test(text)) {
+        if (/ことわざ|猿も木|石の上|急がば|猫に小判|弘法|馬の耳|覆水/.test(text)) return 'idiom_proverb';
+        return 'idiom_four_character';
+      }
+
+      // 歴史
+      if (item.genreId === 'history' || /時代|幕府|戦争|改革|天皇|将軍|条約|憲法|年|明治|江戸|鎌倉|室町|縄文|弥生|戦国|徳川|豊臣|織田|大化|平安|奈良/.test(text)) {
+        if (/年|[0-9]{3,4}/.test(text)) return 'history_year';
+        if (/縄文|弥生|古墳|飛鳥|奈良|平安/.test(text)) return 'history_ancient';
+        if (/鎌倉|室町|戦国|安土|桃山|江戸|幕府|将軍|徳川|豊臣|織田/.test(text)) return 'history_medieval_earlymodern';
+        if (/明治|大正|昭和|平成|憲法|戦争|条約|国際|冷戦|オリンピック/.test(text)) return 'history_modern';
+        return 'history_general';
+      }
+
+      // 地理
+      if (item.genreId === 'capital' || /首都|県庁所在地|都道府県|地方|大陸|州|国|都市|市|県|府|地理|山|川|湖|海|半島|島|気候|緯度|経度|時差|工業|農業/.test(text)) {
+        if (/県庁所在地|都道府県|府庁所在地|庁がある|がある都道府県|地方/.test(text)) return 'geo_prefecture';
+        if (/首都|を首都とする|政治の中心都市/.test(text)) return 'geo_capital';
+        if (/大陸|州|国|地域/.test(text)) return 'geo_country_region';
+        if (/山|川|湖|海|砂漠|半島|島|海洋/.test(text)) return 'geo_landform';
+        if (/気候|季節風|緯度|経度|時差|子午線|赤道/.test(text)) return 'geo_climate_map';
+        if (/工業|農業|産業|貿易|港|空港/.test(text)) return 'geo_industry';
+        return 'geo_general';
+      }
+
+      // 理科：生物・化学・物理・地学まで分ける
+      if (item.genreId === 'element' || /元素|化学式|理科|酸素|水素|二酸化炭素|原子|イオン|電流|電圧|抵抗|光合成|地震|火山|天気|惑星|太陽|月|細胞|血液/.test(text)) {
+        if (/元素記号|元素名|原子番号|^[A-Z][a-z]?$|H|He|Li|Be|B|C|N|O|F|Ne|Na|Mg|Al|Si|P|S|Cl|Ar|K|Ca|Fe|Cu|Zn|Ag|Au|Hg|Pb/.test(text)) return 'science_element_symbol';
+        if (/化学式|物質名|H2O|CO2|O2|H2|NH3|CH4|NaCl|HCl|NaOH|硫酸|硝酸|酢酸|エタノール|グルコース|酸化|還元|中和|BTB|リトマス|フェノールフタレイン|水溶液/.test(text)) return 'science_chemistry';
+        if (/イオン|Na\+|K\+|Ca2|Mg2|H\+|Cu2|Fe2|Fe3|Cl-|OH-|NO3|SO4|CO3|NH4/.test(text)) return 'science_ion';
+        if (/血液|血小板|赤血球|白血球|血しょう|心臓|肺|腎臓|消化|だ液|アミラーゼ|タンパク質|柔毛|神経|感覚|DNA|染色体|遺伝|細胞|葉緑体|光合成|呼吸|植物|道管|師管|受粉|種子|果実|生態系|食物連鎖/.test(text)) return 'science_biology';
+        if (/力|電流|電圧|抵抗|電力|仕事|圧力|周波数|速さ|密度|N|A|V|Ω|W|J|Pa|Hz|m\/s|フック|オーム|凸レンズ|焦点|反射|屈折|浮力|重力|磁石|磁界|電磁誘導|波/.test(text)) return 'science_physics';
+        if (/地震|震源|震央|マグニチュード|震度|P波|S波|火山|岩石|地層|化石|太陽|黒点|地球|月|日食|月食|金星|雲|気圧|前線|気団|台風|露点|湿度|プレート|偏西風/.test(text)) return 'science_earth';
+        return 'science_general';
+      }
+
+      // 雑学：内部でさらに分類
+      if (item.genreId === 'trivia') {
+        if (/県庁所在地|首都|都道府県|地方|国|都市|市|県|府|山|川|湖|海|砂漠|大陸|緯度|経度|時差/.test(text)) return 'trivia_geography';
+        if (/動物|鳥|魚|昆虫|クモ|タコ|イカ|パンダ|コアラ|キリン|ラクダ|イルカ|足|羽毛|えら/.test(text)) return 'trivia_animal';
+        if (/食べ物|原料|牛乳|大豆|米|小麦|チョコ|コーヒー|紅茶|味噌|豆腐|寿司|ラーメン|カレー|酒|ワイン|ビール/.test(text)) return 'trivia_food';
+        if (/太陽|月|惑星|宇宙|星|地球|火星|金星|木星|土星|銀河|彗星|黒点|オーロラ/.test(text)) return 'trivia_space';
+        if (/人物|作者|作曲家|画家|科学者|発明|首相|大臣|監督|作家|医師|弁護士|パイロット|薬剤師/.test(text)) return 'trivia_person';
+        if (/スポーツ|野球|サッカー|バスケット|バレー|ラグビー|テニス|柔道|剣道|マラソン|オリンピック|W杯/.test(text)) return 'trivia_sports';
+        if (/祝日|七夕|クリスマス|節分|ひな祭り|節句|日付/.test(text)) return 'trivia_calendar';
+        if (/楽器|音楽|映画|本|絵|俳句|短歌|将棋|囲碁|チェス|トランプ|サイコロ/.test(text)) return 'trivia_culture';
+        if (/電話|郵便|信号|電池|車|生活|時計|時間|分|秒|km|cm|円|ドル|ポンド/.test(text)) return 'trivia_life';
+        return 'trivia_general';
+      }
+
+      return item.genreId || 'general';
+    }
+
+    function generateOptions(correctItem, allCurrentWords) {
+      const correctCategory = getQuestionCategory(correctItem);
+
+      let candidates = allCurrentWords
+        .filter(item => item.word !== correctItem.word)
+        .filter(item => item.meaning !== correctItem.meaning);
+
+      // 1. 同じ細カテゴリから選ぶ
+      let relatedCandidates = candidates.filter(item => getQuestionCategory(item) === correctCategory);
+
+      // 2. 足りない場合は同じジャンルから選ぶ
+      if (relatedCandidates.length < 2 && correctItem.genreId) {
+        relatedCandidates = candidates.filter(item => item.genreId === correctItem.genreId);
+      }
+
+      // 3. それでも足りない場合のみ全体から補充
+      if (relatedCandidates.length < 2) {
+        relatedCandidates = candidates;
+      }
+
+      relatedCandidates.forEach(item => {
         let score = 0;
-        const lengthDiff = Math.abs(item.meaning.length - correctItem.meaning.length);
-        score -= lengthDiff * 5;
+        const itemCategory = getQuestionCategory(item);
 
-        const wordLengthDiff = Math.abs(item.word.length - correctItem.word.length);
-        score -= wordLengthDiff * 3;
+        if (itemCategory === correctCategory) score += 1000;
+        if (correctItem.genreId && item.genreId === correctItem.genreId) score += 300;
+
+        const answerLengthDiff = Math.abs(String(item.meaning).length - String(correctItem.meaning).length);
+        score -= answerLengthDiff * 4;
+
+        const wordLengthDiff = Math.abs(String(item.word).length - String(correctItem.word).length);
+        score -= wordLengthDiff;
 
         item._score = score;
       });
 
-      candidates.sort((a, b) => b._score - a._score);
+      relatedCandidates.sort((a, b) => b._score - a._score);
 
-      const topCandidates = candidates.slice(0, 12).sort(() => Math.random() - 0.5);
+      const topCandidates = relatedCandidates.slice(0, 30).sort(() => Math.random() - 0.5);
       let dummies = topCandidates.slice(0, 2);
 
-      // 同ジャンルで2つ取れない場合だけ、全体から補充
       if (dummies.length < 2) {
         const usedMeanings = new Set([correctItem.meaning, ...dummies.map(item => item.meaning)]);
         const fallback = allCurrentWords
           .filter(item => item.word !== correctItem.word)
           .filter(item => !usedMeanings.has(item.meaning))
           .sort(() => Math.random() - 0.5);
-
         dummies = [...dummies, ...fallback.slice(0, 2 - dummies.length)];
       }
 
