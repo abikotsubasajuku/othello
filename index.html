@@ -20,6 +20,7 @@
   <script src="./data/idiom.js"></script>
   <script src="./data/math.js"></script>
   <script src="./data/trivia.js"></script>
+  <script src="./data/question_booster.js"></script>
 <link rel="icon" href="data:,">
 </head>
 <body>
@@ -477,11 +478,95 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
     }
 
 
+    
+    function getBoardPositionType(row, col) {
+      const size = 8;
+      const isCorner = (row === 0 || row === size - 1) && (col === 0 || col === size - 1);
+      if (isCorner) return 'corner';
+
+      const nearCorner =
+        ((row <= 1 && col <= 1) ||
+         (row <= 1 && col >= size - 2) ||
+         (row >= size - 2 && col <= 1) ||
+         (row >= size - 2 && col >= size - 2));
+      if (nearCorner) return 'nearCorner';
+
+      const isEdge = row === 0 || col === 0 || row === size - 1 || col === size - 1;
+      if (isEdge) return 'edge';
+
+      if (row >= 3 && row <= 4 && col >= 3 && col <= 4) return 'center';
+      return 'inner';
+    }
+
+    function getTargetLevelForPosition(selectedLevel, row, col) {
+      const p = getBoardPositionType(row, col);
+
+      if (selectedLevel === 'random') {
+        if (p === 'corner') return 'hard';
+        if (p === 'nearCorner') return Math.random() < 0.75 ? 'hard' : 'normal';
+        if (p === 'edge') return Math.random() < 0.55 ? 'normal' : 'hard';
+        if (p === 'center') return Math.random() < 0.65 ? 'easy' : 'normal';
+        return Math.random() < 0.55 ? 'normal' : (Math.random() < 0.5 ? 'easy' : 'hard');
+      }
+
+      if (selectedLevel === 'easy') {
+        if (p === 'corner') return Math.random() < 0.65 ? 'normal' : 'easy';
+        if (p === 'nearCorner') return Math.random() < 0.45 ? 'normal' : 'easy';
+        if (p === 'edge') return Math.random() < 0.25 ? 'normal' : 'easy';
+        return 'easy';
+      }
+
+      if (selectedLevel === 'normal') {
+        if (p === 'corner') return 'hard';
+        if (p === 'nearCorner') return Math.random() < 0.7 ? 'hard' : 'normal';
+        if (p === 'edge') return Math.random() < 0.75 ? 'normal' : 'hard';
+        if (p === 'center') return Math.random() < 0.65 ? 'easy' : 'normal';
+        return Math.random() < 0.7 ? 'normal' : 'easy';
+      }
+
+      if (selectedLevel === 'hard') {
+        if (p === 'center') return Math.random() < 0.45 ? 'normal' : 'hard';
+        if (p === 'inner') return Math.random() < 0.25 ? 'normal' : 'hard';
+        return 'hard';
+      }
+
+      return selectedLevel || 'normal';
+    }
+
+    function getPositionPoint(positionType, questionLevel, originalPoints) {
+      const baseByLevel = { easy: 1, normal: 2, hard: 3 };
+      let point = baseByLevel[questionLevel] || Number(originalPoints) || 2;
+      if (positionType === 'center') point -= 1;
+      if (positionType === 'edge') point += 1;
+      if (positionType === 'nearCorner') point += 2;
+      if (positionType === 'corner') point += 3;
+      return Math.max(1, Math.min(6, point));
+    }
+
+    function pickQuestionFromBucket(buckets, targetLevel, usedQuestionKeys) {
+      const orderMap = {
+        easy: ['easy', 'normal', 'hard'],
+        normal: ['normal', 'easy', 'hard'],
+        hard: ['hard', 'normal', 'easy']
+      };
+      const order = orderMap[targetLevel] || ['normal', 'easy', 'hard'];
+
+      for (const levelName of order) {
+        const bucket = buckets[levelName] || [];
+        const available = bucket.filter(q => !usedQuestionKeys.has(`${q.genreId || ''}:${q.word}:${q.meaning}`));
+        if (available.length) return available[Math.floor(Math.random() * available.length)];
+      }
+
+      const all = [...(buckets.easy || []), ...(buckets.normal || []), ...(buckets.hard || [])];
+      return all[Math.floor(Math.random() * all.length)];
+    }
+
+
     function getQuestionDataByLevel(genreId, levelValue) {
       const allData = window.OTHELLO_QUESTION_DATA || {};
       const playableGenres = ['kanji', 'english', 'element', 'capital', 'history', 'idiom', 'math', 'trivia'];
 
-      function pickRawByLevel(id, level) {
+      function getRawLevelData(id, levelName) {
         const genreData = allData[id] || {};
         if (Array.isArray(genreData)) return genreData;
 
@@ -489,26 +574,42 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
         const normalData = Array.isArray(genreData.normal) ? genreData.normal : [];
         const hardData = Array.isArray(genreData.hard) ? genreData.hard : [];
 
-        if (level === 'random') return [...easyData, ...normalData, ...hardData];
+        if (levelName === 'easy') return easyData.length ? easyData : [...normalData, ...hardData];
+        if (levelName === 'normal') return normalData.length ? normalData : [...easyData, ...hardData];
+        if (levelName === 'hard') return hardData.length ? hardData : [...normalData, ...easyData];
+        return [...easyData, ...normalData, ...hardData];
+      }
 
-        const selected = Array.isArray(genreData[level]) ? genreData[level] : [];
-        return selected.length ? selected : [...easyData, ...normalData, ...hardData];
+      function normalizeList(source, id, levelName, withPrefix = false) {
+        return source.map(q => {
+          const normalized = normalizeQuestionMeta(q, id, withPrefix);
+          return { ...normalized, sourceLevel: levelName };
+        });
+      }
+
+      function buildBucketsForGenre(id, withPrefix = false) {
+        return {
+          easy: normalizeList(getRawLevelData(id, 'easy'), id, 'easy', withPrefix),
+          normal: normalizeList(getRawLevelData(id, 'normal'), id, 'normal', withPrefix),
+          hard: normalizeList(getRawLevelData(id, 'hard'), id, 'hard', withPrefix)
+        };
       }
 
       if (genreId === 'genreRandom') {
-        const collected = [];
+        const mergedBuckets = { easy: [], normal: [], hard: [] };
         playableGenres.forEach(id => {
-          pickRawByLevel(id, levelValue).forEach(q => {
-            collected.push(normalizeQuestionMeta(q, id, true));
-          });
+          const buckets = buildBucketsForGenre(id, true);
+          mergedBuckets.easy.push(...buckets.easy);
+          mergedBuckets.normal.push(...buckets.normal);
+          mergedBuckets.hard.push(...buckets.hard);
         });
-        CURRENT_OPTION_POOL = collected;
-        return shuffleArrayUnique(collected);
+        CURRENT_OPTION_POOL = [...mergedBuckets.easy, ...mergedBuckets.normal, ...mergedBuckets.hard];
+        return { mode: 'positionWeighted', selectedLevel: levelValue, buckets: mergedBuckets };
       }
 
-      const selected = pickRawByLevel(genreId, levelValue).map(q => normalizeQuestionMeta(q, genreId, false));
-      CURRENT_OPTION_POOL = selected;
-      return shuffleArrayUnique(selected);
+      const buckets = buildBucketsForGenre(genreId, false);
+      CURRENT_OPTION_POOL = [...buckets.easy, ...buckets.normal, ...buckets.hard];
+      return { mode: 'positionWeighted', selectedLevel: levelValue, buckets };
     }
 
     const DIRECTIONS = [
@@ -632,7 +733,6 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
         'math_expression'
       ]);
 
-      // 年代・元素記号・岩石・都市・数式などは、まず答えの型を絶対にそろえる
       if (strictTypes.has(normalizedCorrect.answerType)) {
         const sameType = candidates.filter(item => item.answerType === normalizedCorrect.answerType);
         if (sameType.length >= 2) {
@@ -640,10 +740,8 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
         }
       }
 
-      // 1. 同じ group
       let pool = candidates.filter(item => item.group === normalizedCorrect.group);
 
-      // 2. 同じ answerType + category
       if (pool.length < 2) {
         pool = candidates.filter(item =>
           item.category === normalizedCorrect.category &&
@@ -651,22 +749,18 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
         );
       }
 
-      // 3. 同じ answerType
       if (pool.length < 2) {
         pool = candidates.filter(item => item.answerType === normalizedCorrect.answerType);
       }
 
-      // 4. 同じ category
       if (pool.length < 2) {
         pool = candidates.filter(item => item.category === normalizedCorrect.category);
       }
 
-      // 5. 同じ genre
       if (pool.length < 2) {
         pool = candidates.filter(item => item.genreId === normalizedCorrect.genreId);
       }
 
-      // 6. 最後の保険
       if (pool.length < 2) {
         pool = candidates;
       }
@@ -677,15 +771,29 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
 
       pool.sort((a, b) => b._relatedScore - a._relatedScore);
 
-      const topPool = pool.slice(0, Math.min(10, pool.length)).sort(() => Math.random() - 0.5);
-      let dummies = topPool.slice(0, 2);
+      const dummies = [];
+      const usedMeanings = new Set([normalizedCorrect.meaning]);
+
+      for (const item of pool) {
+        if (!usedMeanings.has(item.meaning)) {
+          dummies.push(item);
+          usedMeanings.add(item.meaning);
+        }
+        if (dummies.length >= 2) break;
+      }
 
       if (dummies.length < 2) {
-        const usedMeanings = new Set([normalizedCorrect.meaning, ...dummies.map(item => item.meaning)]);
         const fallback = candidates
           .filter(item => !usedMeanings.has(item.meaning))
           .sort((a, b) => getRelatedScore(normalizedCorrect, b) - getRelatedScore(normalizedCorrect, a));
-        dummies = [...dummies, ...fallback.slice(0, 2 - dummies.length)];
+
+        for (const item of fallback) {
+          if (!usedMeanings.has(item.meaning)) {
+            dummies.push(item);
+            usedMeanings.add(item.meaning);
+          }
+          if (dummies.length >= 2) break;
+        }
       }
 
       const options = [normalizedCorrect, ...dummies].map(item => item.meaning);
@@ -721,33 +829,62 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
         setLevel(LEVELS[genre][0].value);
       }, [genre]);
 
-      const initializeBoard = (wordDataList, targetGenre) => {
+      const initializeBoard = (questionSource, targetGenre) => {
         setPlayMode(menuMode);
         setActiveCpuLevel(cpuLevel);
         setCurrentGenre(targetGenre);
-        
-        const fallbackData = getDataForLevel(targetGenre, level) || [];
-        let shuffledData = [...wordDataList].sort(() => Math.random() - 0.5);
-        
-        // 足りない分はフォールバックデータから補充
-        while (shuffledData.length > 0 && shuffledData.length < 64) {
-          shuffledData = [...shuffledData, ...fallbackData].sort(() => Math.random() - 0.5);
-        }
-        shuffledData = shuffledData.slice(0, 64);
-        setAllWordsInPlay(shuffledData);
 
         const newBoard = [];
+        const usedQuestionKeys = new Set();
+
+        const isPositionWeighted = questionSource && questionSource.mode === 'positionWeighted';
+        const selectedLevel = isPositionWeighted ? questionSource.selectedLevel : level;
+        const buckets = isPositionWeighted ? questionSource.buckets : null;
+        const flatWords = Array.isArray(questionSource) ? questionSource : [];
+        let flatIndex = 0;
+
+        const boardQuestions = [];
+
         for (let r = 0; r < 8; r++) {
           const row = [];
           for (let c = 0; c < 8; c++) {
-            const data = shuffledData[r * 8 + c];
+            const positionType = getBoardPositionType(r, c);
+            const targetLevel = getTargetLevelForPosition(selectedLevel, r, c);
+
+            let data;
+            if (isPositionWeighted) {
+              data = pickQuestionFromBucket(buckets, targetLevel, usedQuestionKeys);
+            } else {
+              data = flatWords[flatIndex % flatWords.length];
+              flatIndex++;
+            }
+
+            if (!data) data = { word: "問題なし", meaning: "答えなし", points: 1 };
+
+            const key = `${data.genreId || ''}:${data.word}:${data.meaning}`;
+            usedQuestionKeys.add(key);
+
+            const adjustedPoints = getPositionPoint(positionType, data.sourceLevel || targetLevel, data.points);
+
             let owner = null;
             if ((r === 3 && c === 3) || (r === 4 && c === 4)) owner = 'white';
             if ((r === 3 && c === 4) || (r === 4 && c === 3)) owner = 'black';
-            row.push({ ...data, owner });
+
+            const cellData = {
+              ...data,
+              points: adjustedPoints,
+              owner,
+              boardPositionType: positionType,
+              boardTargetLevel: targetLevel
+            };
+
+            row.push(cellData);
+            boardQuestions.push(cellData);
           }
           newBoard.push(row);
         }
+
+        setAllWordsInPlay(CURRENT_OPTION_POOL && CURRENT_OPTION_POOL.length ? CURRENT_OPTION_POOL : boardQuestions);
         setBoard(newBoard);
         setCurrentPlayer('black');
         setGameState('playing');
@@ -759,7 +896,7 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
         setIsGeneratingTheme(true);
         try {
           const words = getQuestionDataByLevel(genre, level);
-          if (!words || words.length === 0) {
+          if (!words || (Array.isArray(words) && words.length === 0)) {
             throw new Error("問題データが見つかりません。");
           }
           const levelLabel = LEVELS[genre].find(l => l.value === level)?.label || 'ランダム';
@@ -848,7 +985,7 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
           setBoard(newBoard);
           setToastMessage("⭕️ 正解！石を置きました。");
         } else {
-          setToastMessage(`❌ 不正解... ペナルティで相手のターンになります。正解は「${wordObj.meaning}」でした。`);
+          setToastMessage("不正解です。次の手番に移ります。");
         }
 
         setQuizModal(null);
@@ -868,6 +1005,22 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
         }
         return { black: blackScore, white: whiteScore };
       }, [board]);
+
+      
+      const getBoardCellLabel = (word) => {
+        const cleaned = String(word || '').replace(/^【[^】]+】/, '').replace(/\s+/g, '').trim();
+        if (cleaned.length <= 8) return cleaned;
+        return `${cleaned.slice(0, 7)}…`;
+      };
+
+      const getBoardPositionShortLabel = (cell) => {
+        const type = cell.boardPositionType;
+        if (type === 'corner') return '角';
+        if (type === 'nearCorner') return '強';
+        if (type === 'edge') return '辺';
+        if (type === 'center') return '易';
+        return '';
+      };
 
       const quizTitle = GENRES[currentGenre]?.quizQuestion || "この問題の答えは？";
       const cpuLabelDisplay = activeCpuLevel === 'easy' ? 'よわい' : activeCpuLevel === 'hard' ? 'つよい' : 'ふつう';
@@ -1041,7 +1194,7 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
                             {cell.points}pt
                           </div>
                           <div className="text-[9px] sm:text-[11px] font-bold text-white text-center leading-tight w-full px-0.5" style={{ textShadow: "1px 1px 1px rgba(0,0,0,0.4)", wordBreak: "break-word" }}>
-                            {cell.word}
+                            {getBoardCellLabel ? getBoardCellLabel(cell.word) : cell.word}
                           </div>
                           {isValid && (
                             <div className="absolute w-2 h-2 rounded-full bg-yellow-300 opacity-70"></div>
