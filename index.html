@@ -1233,43 +1233,31 @@ const handleQuizAnswer = (selectedMeaning) => {
             <div className="flex justify-between items-center px-4">
               <div className={`flex flex-col items-center p-2 rounded-lg ${currentPlayer === 'black' ? 'bg-stone-200 ring-2 ring-stone-500' : ''}`}>
                 <div className="w-6 h-6 rounded-full bg-black mb-1"></div>
+                <span className="font-bold text-lg">黒 (1P)</span>
+                <span className="text-2xl font-black text-stone-700">{scores.black} <span className="text-sm">pt</span></span>
+              </div>
+
+              <div className="flex flex-col items-center gap-1">
+                <div className="text-lg font-bold text-stone-500">VS</div>
                 {threeMistakeRuleEnabled && (
-                  <div className="text-sm sm:text-base font-bold text-red-600 bg-red-50 rounded-full px-3 py-1 shadow-sm">
+                  <div className="text-xs sm:text-sm font-bold text-red-600 bg-red-50 rounded-full px-3 py-1 shadow-sm">
                     ミス：{wrongCount}/3
                   </div>
                 )}
                 {timeLimitSeconds > 0 && (
-                  <div className="text-sm sm:text-base font-bold text-blue-600 bg-blue-50 rounded-full px-3 py-1 shadow-sm">
+                  <div className="text-xs sm:text-sm font-bold text-blue-600 bg-blue-50 rounded-full px-3 py-1 shadow-sm">
                     制限：{timeLimitSeconds}秒
                   </div>
                 )}
-                )}
-                <span className="font-bold text-lg">黒 (1P)</span>
-                <span className="text-2xl font-black text-stone-700">{scores.black} <span className="text-sm">pt</span></span>
               </div>
-              
-              <div className="text-lg font-bold text-stone-500">VS</div>
 
               <div className={`flex flex-col items-center p-2 rounded-lg ${currentPlayer === 'white' ? 'bg-stone-200 ring-2 ring-stone-500' : ''}`}>
-                <div className="w-6 h-6 rounded-full bg-white border-2 border-stone-400 mb-1"></div>
-                <span className="font-bold text-sm sm:text-base">{player2Label}</span>
+                <div className="w-6 h-6 rounded-full bg-white border-2 border-stone-300 mb-1"></div>
+                <span className="font-bold text-lg">{playMode === 'cpu' ? '白 (CPU)' : '白 (2P)'}</span>
                 <span className="text-2xl font-black text-stone-700">{scores.white} <span className="text-sm">pt</span></span>
               </div>
             </div>
 
-            <div className="text-center mt-3 font-semibold text-stone-700">
-              {gameState === 'gameover' ? "ゲーム終了！" : 
-                (playMode === 'cpu' && currentPlayer === 'white' ? "CPUが考え中..." : `現在のターン: ${currentPlayer === 'black' ? '黒' : '白'}`)}
-            </div>
-          </div>
-
-          {toastMessage && (
-            <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-stone-800 text-white px-6 py-3 rounded-full shadow-lg font-bold text-sm sm:text-base animate-bounce w-max max-w-[90vw]">
-              {toastMessage}
-            </div>
-          )}
-
-          <div className="w-full max-w-md bg-stone-800 p-1.5 rounded-lg shadow-2xl">
             <div className="grid grid-cols-8 gap-0.5">
               {board.map((row, r) => 
                 row.map((cell, c) => {
