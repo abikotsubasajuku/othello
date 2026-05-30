@@ -279,54 +279,236 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
       return copied;
     }
 
+    
+    // 選択肢専用プール：盤面だけではなく、同レベル全問題から選択肢を作る
+    let CURRENT_OPTION_POOL = [];
+
+    function getQuestionCategory(item) {
+      const rawWord = String(item.word || '').replace(/^【[^】]+】/, '');
+      const answer = String(item.meaning || '');
+      const text = `${rawWord} ${answer}`;
+
+      if (item.genreId === 'math' || /[0-9xπ√+\-×÷=^]|微分|積分|関数|方程式|確率|面積|体積|角|数列|log|sin|cos|tan|C|P/.test(text)) return 'math';
+      if (item.genreId === 'english' || /^[A-Za-z][A-Za-z\s\-']*$/.test(rawWord)) return 'english';
+      if (item.genreId === 'kanji') return 'kanji';
+      if (item.genreId === 'idiom' || /四字熟語|ことわざ|慣用句|意味|表す/.test(text)) return 'idiom';
+      if (item.genreId === 'history' || /時代|幕府|戦争|改革|天皇|将軍|条約|憲法|年|明治|江戸|鎌倉|室町|縄文|弥生|戦国|徳川|豊臣|織田/.test(text)) return 'history';
+      if (item.genreId === 'capital' || /首都|県庁所在地|都道府県|地方|大陸|州|国|都市|市|県|府|地理|山|川|湖|海|半島|島|気候|緯度|経度|時差|工業|農業/.test(text)) return 'geography';
+      if (item.genreId === 'element' || /元素|化学式|理科|酸素|水素|二酸化炭素|原子|イオン|電流|電圧|抵抗|光合成|地震|火山|天気|惑星|太陽|月|細胞|血液/.test(text)) return 'science';
+      if (item.genreId === 'trivia') return 'trivia';
+      return item.genreId || 'general';
+    }
+
+    function getQuestionGroup(item) {
+      if (item.group) return item.group;
+
+      const rawWord = String(item.word || '').replace(/^【[^】]+】/, '');
+      const answer = String(item.meaning || '');
+      const text = `${rawWord} ${answer}`;
+      const category = getQuestionCategory(item);
+
+      if (/起きた年|始まった年|成立した年|施行された年|発布された年|来航した年|遷都|滅亡|返還|加盟/.test(rawWord) || /年$/.test(answer)) return 'history_year';
+
+      if (category === 'science') {
+        if (/岩石|組織|火成岩|火山岩|深成岩|堆積岩|石灰岩|凝灰岩|花こう岩|安山岩|玄武岩|斑状|等粒状/.test(text)) return 'science_rock';
+        if (/血液|血球|血しょう|赤血球|白血球|血小板|固める|酸素を運ぶ|病原体|免疫/.test(text)) return 'science_blood';
+        if (/心臓|肺|腎臓|消化|だ液|胃|小腸|柔毛|呼吸|感覚|神経|脳|脊髄|ヒト|体/.test(text)) return 'science_human_body';
+        if (/植物|光合成|葉緑体|道管|師管|受粉|胚珠|子房|種子|果実|シダ|コケ|裸子|被子/.test(text)) return 'science_plant';
+        if (/DNA|遺伝|染色体|体細胞分裂|減数分裂|遺伝子|塩基|転写|翻訳|RNA/.test(text)) return 'science_genetics';
+        if (/生態系|生産者|消費者|分解者|食物連鎖|進化|環境/.test(text)) return 'science_ecology';
+        if (/元素記号|元素名|原子番号/.test(text) || /^[A-Z][a-z]?$/.test(answer)) return 'science_element_symbol';
+        if (/イオン|Na\+|K\+|Ca2|Mg2|H\+|Cu2|Fe2|Fe3|Cl-|OH-|NO3|SO4|CO3|NH4/.test(text)) return 'science_ion';
+        if (/化学式|物質名|H2O|CO2|O2|H2|N2|NH3|CH4|NaCl|HCl|NaOH|H2SO4|HNO3|CH3COOH|C2H5OH|C6H12O6|酸化|還元|中和|BTB|リトマス|フェノールフタレイン|水溶液|酸性|アルカリ性/.test(text)) return 'science_chemistry';
+        if (/単位|電流|電圧|抵抗|電力|仕事|圧力|周波数|速さ|密度|N|A|V|Ω|W|J|Pa|Hz|m\/s|フック|オーム|凸レンズ|焦点|反射|屈折|浮力|重力|磁石|磁界|電磁誘導|波|力/.test(text)) return 'science_physics';
+        if (/地震|震源|震央|マグニチュード|震度|P波|S波|火山|地層|化石|太陽|黒点|地球|月|日食|月食|金星|雲|気圧|前線|気団|台風|露点|湿度|プレート|偏西風|天気/.test(text)) return 'science_earth';
+        return 'science_general';
+      }
+
+      if (category === 'geography') {
+        if (/県庁所在地|府庁所在地|都道府県|庁がある|がある都道府県/.test(text)) return 'geo_prefecture_capital';
+        if (/首都|を首都とする|政治の中心都市/.test(text)) return 'geo_country_capital';
+        if (/地方|属する地方/.test(text)) return 'geo_region';
+        if (/大陸|州|国|地域/.test(text)) return 'geo_country_region';
+        if (/山|川|湖|海|砂漠|半島|島|海洋/.test(text)) return 'geo_landform';
+        if (/気候|季節風|緯度|経度|時差|子午線|赤道|地図|等高線/.test(text)) return 'geo_map_climate';
+        if (/工業|農業|産業|貿易|港|空港|生産/.test(text)) return 'geo_industry';
+        return 'geo_general';
+      }
+
+      if (category === 'math') {
+        if (/微分|積分|∫/.test(text)) return 'math_calculus';
+        if (/sin|cos|tan|三角/.test(text)) return 'math_trig';
+        if (/log|指数|[0-9]\^/.test(text)) return 'math_log_exp';
+        if (/数列|等差|等比/.test(text)) return 'math_sequence';
+        if (/C[0-9]|P[0-9]|確率|赤.*青/.test(text)) return 'math_probability';
+        if (/因数分解|x\^2|二次|頂点/.test(text)) return 'math_quadratic';
+        if (/連立|2点|直線|傾き|切片|y=/.test(text)) return 'math_function';
+        if (/√|平方根/.test(text)) return 'math_root';
+        if (/面積|体積|角|三角形|円|球/.test(text)) return 'math_geometry';
+        if (/x/.test(text)) return 'math_equation';
+        return 'math_arithmetic';
+      }
+
+      if (category === 'history') {
+        if (/縄文|弥生|古墳|飛鳥|奈良|平安/.test(text)) return 'history_ancient';
+        if (/鎌倉|室町|戦国|安土|桃山|江戸|幕府|将軍|徳川|豊臣|織田/.test(text)) return 'history_medieval_earlymodern';
+        if (/明治|大正|昭和|平成|憲法|戦争|条約|国際|冷戦|オリンピック/.test(text)) return 'history_modern';
+        return 'history_general';
+      }
+
+      if (category === 'english') return rawWord.trim().includes(' ') ? 'english_phrase' : 'english_word';
+      if (category === 'idiom') return /ことわざ|猿も木|石の上|急がば|猫に小判|弘法|馬の耳|覆水|二兎|ちりも積もれば/.test(text) ? 'idiom_proverb' : 'idiom_four_character';
+      if (item.genreId === 'kanji') return 'kanji_reading';
+      return item.genreId || 'general';
+    }
+
+    function getAnswerType(item) {
+      if (item.answerType) return item.answerType;
+
+      const rawWord = String(item.word || '').replace(/^【[^】]+】/, '');
+      const answer = String(item.meaning || '');
+      const text = `${rawWord} ${answer}`;
+
+      // 年代問題：選択肢は必ず「〜年」に寄せる
+      if (/年$/.test(answer) || /起きた年|始まった年|成立した年|施行された年|発布された年|来航した年|遷都|滅亡|返還|加盟/.test(rawWord)) {
+        return 'year';
+      }
+
+      // 元素記号
+      if (/^[A-Z][a-z]?$/.test(answer) || /元素記号/.test(rawWord)) {
+        return 'element_symbol';
+      }
+
+      // 化学式
+      if (/化学式|物質名/.test(rawWord) || /^(H2O|CO2|O2|H2|N2|NH3|CH4|NaCl|HCl|NaOH|H2SO4|HNO3|CH3COOH|C2H5OH|C6H12O6|CaCO3|CuO|Ag2O|Fe2O3|Ca\(OH\)2|CuSO4|KNO3|CaCl2|FeS|Cl2|I2|O3|CO)$/.test(answer)) {
+        return 'chemical_formula_or_name';
+      }
+
+      // イオン式
+      if (/イオン/.test(rawWord) || /(\+|-|\^2-|\^2\+)/.test(answer) && /[A-Z]/.test(answer)) {
+        return 'ion';
+      }
+
+      // 岩石・地学用語
+      if (/岩石|組織|火成岩|火山岩|深成岩|堆積岩|石灰岩|凝灰岩|花こう岩|安山岩|玄武岩|斑状|等粒状/.test(text)) {
+        return 'rock_term';
+      }
+
+      // 血液・人体
+      if (/血液|血球|血しょう|赤血球|白血球|血小板|固める|酸素を運ぶ|病原体/.test(text)) {
+        return 'blood_term';
+      }
+
+      // 都市・県庁所在地
+      if (/市$|区$|町$|村$/.test(answer) || /県庁所在地|府庁所在地|庁がある市|中心都市/.test(rawWord)) {
+        return 'city';
+      }
+
+      // 都道府県
+      if (/県$|府$|都$|道$/.test(answer)) {
+        return 'prefecture';
+      }
+
+      // 国名・地域
+      if (/首都|を首都とする|国の首都|がある国|大陸|州/.test(rawWord)) {
+        return 'country_or_region';
+      }
+
+      // 数学・数値・単位
+      if (/^[0-9\-\/.]+$/.test(answer)) return 'number';
+      if (/年$|月$|日$|時間$|分$|秒$|℃|cm2|cm3|cm|m2|m3|m\/s|m|km|g|kg|mol|L|%|N|A|V|Ω|W|J|Pa|Hz|点$|本$|個$|枚$|人$|色$/.test(answer)) {
+        return 'number_unit';
+      }
+      if (/[xπ√+\-×÷=^]|log|sin|cos|tan|C$/.test(answer)) {
+        return 'math_expression';
+      }
+
+      // 英語
+      if (/^[A-Za-z\s\-']+$/.test(answer)) return 'english';
+
+      // 四字熟語・ことわざ
+      if (/四字熟語|ことわざ|慣用句/.test(rawWord) || /^[一-龯]{4}$/.test(answer)) {
+        return 'idiom_or_proverb';
+      }
+
+      return 'text';
+    }
+
+    function normalizeQuestionMeta(question, genreId, withPrefix = false) {
+      const genreLabel = GENRES[genreId]?.label || genreId;
+      const cleanedWord = String(question.word || '').replace(/^【[^】]+】/, '');
+      const base = {
+        ...question,
+        genreId,
+        genreLabel,
+        word: withPrefix ? `【${genreLabel}】${cleanedWord}` : cleanedWord
+      };
+
+      return {
+        ...base,
+        category: base.category || getQuestionCategory(base),
+        group: base.group || getQuestionGroup(base),
+        answerType: base.answerType || getAnswerType(base)
+      };
+    }
+
+    function getRelatedScore(correctItem, candidate) {
+      let score = 0;
+
+      if (candidate.group === correctItem.group) score += 12000;
+      if (candidate.answerType === correctItem.answerType) score += 8000;
+      if (candidate.category === correctItem.category) score += 3000;
+      if (candidate.genreId === correctItem.genreId) score += 1000;
+
+      const correctAnswer = String(correctItem.meaning || '');
+      const candidateAnswer = String(candidate.meaning || '');
+      const correctWord = String(correctItem.word || '');
+      const candidateWord = String(candidate.word || '');
+
+      score -= Math.abs(correctAnswer.length - candidateAnswer.length) * 8;
+      score -= Math.abs(correctWord.length - candidateWord.length) * 2;
+
+      const keywords = ['血液','血球','岩石','組織','元素','化学式','イオン','電流','電圧','速さ','地震','火山','植物','細胞','県庁所在地','首都','都道府県','方程式','関数','確率','微分','積分','ことわざ','四字熟語','起きた年'];
+      keywords.forEach(k => {
+        if (correctWord.includes(k) && candidateWord.includes(k)) score += 700;
+      });
+
+      return score;
+    }
+
+
     function getQuestionDataByLevel(genreId, levelValue) {
       const allData = window.OTHELLO_QUESTION_DATA || {};
       const playableGenres = ['kanji', 'english', 'element', 'capital', 'history', 'idiom', 'math', 'trivia'];
 
-      function normalizeQuestions(source, id, withPrefix = false) {
-        const genreLabel = GENRES[id]?.label || id;
-        return source.map(q => ({
-          ...q,
-          genreId: id,
-          genreLabel,
-          word: withPrefix ? `【${genreLabel}】${String(q.word).replace(/^【[^】]+】/, '')}` : q.word
-        }));
-      }
-
-      function pickByLevel(id, level) {
+      function pickRawByLevel(id, level) {
         const genreData = allData[id] || {};
-
-        if (Array.isArray(genreData)) return normalizeQuestions(genreData, id);
+        if (Array.isArray(genreData)) return genreData;
 
         const easyData = Array.isArray(genreData.easy) ? genreData.easy : [];
         const normalData = Array.isArray(genreData.normal) ? genreData.normal : [];
         const hardData = Array.isArray(genreData.hard) ? genreData.hard : [];
 
-        if (level === 'random') {
-          return normalizeQuestions([...easyData, ...normalData, ...hardData], id);
-        }
+        if (level === 'random') return [...easyData, ...normalData, ...hardData];
 
         const selected = Array.isArray(genreData[level]) ? genreData[level] : [];
-        return normalizeQuestions(selected.length ? selected : [...easyData, ...normalData, ...hardData], id);
+        return selected.length ? selected : [...easyData, ...normalData, ...hardData];
       }
 
       if (genreId === 'genreRandom') {
         const collected = [];
         playableGenres.forEach(id => {
-          const genreLabel = GENRES[id]?.label || id;
-          pickByLevel(id, levelValue).forEach(q => {
-            collected.push({
-              ...q,
-              genreId: id,
-              genreLabel,
-              word: `【${genreLabel}】${String(q.word).replace(/^【[^】]+】/, '')}`
-            });
+          pickRawByLevel(id, levelValue).forEach(q => {
+            collected.push(normalizeQuestionMeta(q, id, true));
           });
         });
+        CURRENT_OPTION_POOL = collected;
         return shuffleArrayUnique(collected);
       }
 
-      return shuffleArrayUnique(pickByLevel(genreId, levelValue));
+      const selected = pickRawByLevel(genreId, levelValue).map(q => normalizeQuestionMeta(q, genreId, false));
+      CURRENT_OPTION_POOL = selected;
+      return shuffleArrayUnique(selected);
     }
 
     const DIRECTIONS = [
@@ -414,183 +596,99 @@ const clampPoints = (points) => Math.max(1, Math.min(5, Number(points) || 1));
     
 
     
-    function getQuestionCategory(item) {
-      const rawWord = String(item.word || '').replace(/^【[^】]+】/, '');
-      const answer = String(item.meaning || '');
-      const text = `${rawWord} ${answer}`;
+    
 
-      if (item.genreId === 'math' || /[0-9xπ√+\-×÷=^]|微分|積分|関数|方程式|確率|面積|体積|角|数列|log|sin|cos|tan|C|P/.test(text)) return 'math';
-      if (item.genreId === 'english' || /^[A-Za-z][A-Za-z\s\-']*$/.test(rawWord)) return 'english';
-      if (item.genreId === 'kanji') return 'kanji';
-      if (item.genreId === 'idiom' || /四字熟語|ことわざ|慣用句|意味|表す/.test(text)) return 'idiom';
-      if (item.genreId === 'history' || /時代|幕府|戦争|改革|天皇|将軍|条約|憲法|年|明治|江戸|鎌倉|室町|縄文|弥生|戦国|徳川|豊臣|織田/.test(text)) return 'history';
-      if (item.genreId === 'capital' || /首都|県庁所在地|都道府県|地方|大陸|州|国|都市|市|県|府|地理|山|川|湖|海|半島|島|気候|緯度|経度|時差|工業|農業/.test(text)) return 'geography';
-      if (item.genreId === 'element' || /元素|化学式|理科|酸素|水素|二酸化炭素|原子|イオン|電流|電圧|抵抗|光合成|地震|火山|天気|惑星|太陽|月|細胞|血液/.test(text)) return 'science';
-      if (item.genreId === 'trivia') return 'trivia';
-      return item.genreId || 'general';
-    }
+    
 
-    function getQuestionGroup(item) {
-      const rawWord = String(item.word || '').replace(/^【[^】]+】/, '');
-      const answer = String(item.meaning || '');
-      const text = `${rawWord} ${answer}`;
+    
 
-      if (item.genreId === 'element' || getQuestionCategory(item) === 'science') {
-        if (/血液|血球|血しょう|赤血球|白血球|血小板|固める|酸素を運ぶ|病原体|免疫/.test(text)) return 'science_blood';
-        if (/心臓|肺|腎臓|消化|だ液|胃|小腸|柔毛|呼吸|感覚|神経|脳|脊髄|ヒト|体/.test(text)) return 'science_human_body';
-        if (/植物|光合成|葉緑体|道管|師管|受粉|胚珠|子房|種子|果実|シダ|コケ|裸子|被子/.test(text)) return 'science_plant';
-        if (/DNA|遺伝|染色体|体細胞分裂|減数分裂|遺伝子|塩基|転写|翻訳|RNA/.test(text)) return 'science_genetics';
-        if (/生態系|生産者|消費者|分解者|食物連鎖|進化|環境/.test(text)) return 'science_ecology';
-        if (/元素記号|元素名|原子番号/.test(text) || /^[A-Z][a-z]?$/.test(answer)) return 'science_element_symbol';
-        if (/イオン|Na\+|K\+|Ca2|Mg2|H\+|Cu2|Fe2|Fe3|Cl-|OH-|NO3|SO4|CO3|NH4/.test(text)) return 'science_ion';
-        if (/化学式|物質名|H2O|CO2|O2|H2|N2|NH3|CH4|NaCl|HCl|NaOH|H2SO4|HNO3|CH3COOH|C2H5OH|C6H12O6|酸化|還元|中和|BTB|リトマス|フェノールフタレイン|水溶液|酸性|アルカリ性/.test(text)) return 'science_chemistry';
-        if (/単位|電流|電圧|抵抗|電力|仕事|圧力|周波数|速さ|密度|N|A|V|Ω|W|J|Pa|Hz|m\/s|フック|オーム|凸レンズ|焦点|反射|屈折|浮力|重力|磁石|磁界|電磁誘導|波|力/.test(text)) return 'science_physics';
-        if (/地震|震源|震央|マグニチュード|震度|P波|S波|火山|岩石|地層|化石|太陽|黒点|地球|月|日食|月食|金星|雲|気圧|前線|気団|台風|露点|湿度|プレート|偏西風|天気/.test(text)) return 'science_earth';
-        return 'science_general';
-      }
-
-      if (item.genreId === 'capital' || getQuestionCategory(item) === 'geography') {
-        if (/県庁所在地|府庁所在地|都道府県|庁がある|がある都道府県/.test(text)) return 'geo_prefecture_capital';
-        if (/首都|を首都とする|政治の中心都市/.test(text)) return 'geo_country_capital';
-        if (/地方|属する地方/.test(text)) return 'geo_region';
-        if (/大陸|州|国|地域/.test(text)) return 'geo_country_region';
-        if (/山|川|湖|海|砂漠|半島|島|海洋/.test(text)) return 'geo_landform';
-        if (/気候|季節風|緯度|経度|時差|子午線|赤道|地図|等高線/.test(text)) return 'geo_map_climate';
-        if (/工業|農業|産業|貿易|港|空港|生産/.test(text)) return 'geo_industry';
-        return 'geo_general';
-      }
-
-      if (item.genreId === 'math' || getQuestionCategory(item) === 'math') {
-        if (/微分|積分|∫/.test(text)) return 'math_calculus';
-        if (/sin|cos|tan|三角/.test(text)) return 'math_trig';
-        if (/log|指数|[0-9]\^/.test(text)) return 'math_log_exp';
-        if (/数列|等差|等比/.test(text)) return 'math_sequence';
-        if (/C[0-9]|P[0-9]|確率|赤.*青/.test(text)) return 'math_probability';
-        if (/因数分解|x\^2|二次|頂点/.test(text)) return 'math_quadratic';
-        if (/連立|2点|直線|傾き|切片|y=/.test(text)) return 'math_function';
-        if (/√|平方根/.test(text)) return 'math_root';
-        if (/面積|体積|角|三角形|円|球/.test(text)) return 'math_geometry';
-        if (/x/.test(text)) return 'math_equation';
-        return 'math_arithmetic';
-      }
-
-      if (item.genreId === 'history' || getQuestionCategory(item) === 'history') {
-        if (/年|[0-9]{3,4}/.test(text)) return 'history_year';
-        if (/縄文|弥生|古墳|飛鳥|奈良|平安/.test(text)) return 'history_ancient';
-        if (/鎌倉|室町|戦国|安土|桃山|江戸|幕府|将軍|徳川|豊臣|織田/.test(text)) return 'history_medieval_earlymodern';
-        if (/明治|大正|昭和|平成|憲法|戦争|条約|国際|冷戦|オリンピック/.test(text)) return 'history_modern';
-        return 'history_general';
-      }
-
-      if (item.genreId === 'english' || getQuestionCategory(item) === 'english') {
-        if (rawWord.trim().includes(' ')) return 'english_phrase';
-        return 'english_word';
-      }
-
-      if (item.genreId === 'idiom' || getQuestionCategory(item) === 'idiom') {
-        if (/ことわざ|猿も木|石の上|急がば|猫に小判|弘法|馬の耳|覆水|二兎|ちりも積もれば/.test(text)) return 'idiom_proverb';
-        return 'idiom_four_character';
-      }
-
-      if (item.genreId === 'trivia') {
-        if (/県庁所在地|首都|都道府県|地方|国|都市|市|県|府|山|川|湖|海|砂漠|大陸|緯度|経度|時差/.test(text)) return 'trivia_geography';
-        if (/動物|鳥|魚|昆虫|クモ|タコ|イカ|パンダ|コアラ|キリン|ラクダ|イルカ|足|羽毛|えら/.test(text)) return 'trivia_animal';
-        if (/食べ物|原料|牛乳|大豆|米|小麦|チョコ|コーヒー|紅茶|味噌|豆腐|寿司|ラーメン|カレー|酒|ワイン|ビール/.test(text)) return 'trivia_food';
-        if (/太陽|月|惑星|宇宙|星|地球|火星|金星|木星|土星|銀河|彗星|黒点|オーロラ/.test(text)) return 'trivia_space';
-        if (/人物|作者|作曲家|画家|科学者|発明|首相|大臣|監督|作家|医師|弁護士|パイロット|薬剤師/.test(text)) return 'trivia_person';
-        if (/スポーツ|野球|サッカー|バスケット|バレー|ラグビー|テニス|柔道|剣道|マラソン|オリンピック|W杯/.test(text)) return 'trivia_sports';
-        if (/祝日|七夕|クリスマス|節分|ひな祭り|節句|日付/.test(text)) return 'trivia_calendar';
-        if (/楽器|音楽|映画|本|絵|俳句|短歌|将棋|囲碁|チェス|トランプ|サイコロ/.test(text)) return 'trivia_culture';
-        if (/電話|郵便|信号|電池|車|生活|時計|時間|分|秒|km|cm|円|ドル|ポンド/.test(text)) return 'trivia_life';
-        return 'trivia_general';
-      }
-
-      if (item.genreId === 'kanji') return 'kanji_reading';
-      return item.genreId || 'general';
-    }
-
-    function getAnswerType(item) {
-      const answer = String(item.meaning || '');
-      if (/^[A-Z][a-z]?$/.test(answer)) return 'element_symbol';
-      if (/^[A-Za-z0-9()+\-^]+$/.test(answer) && /[0-9]/.test(answer)) return 'formula_or_math';
-      if (/市$|区$|町$|村$/.test(answer)) return 'city';
-      if (/県$|府$|都$|道$/.test(answer)) return 'prefecture';
-      if (/年$|月$|日$|時間$|分$|秒$|℃|cm|m|km|g|kg|mol|L|%|点$|本$|個$|枚$|人$|色$/.test(answer)) return 'number_unit';
-      if (/^[0-9\-\/.]+$/.test(answer)) return 'number';
-      if (/^[A-Za-z\s\-']+$/.test(answer)) return 'english';
-      return 'text';
-    }
-
-    function getRelatedScore(correctItem, candidate) {
-      const correctCategory = getQuestionCategory(correctItem);
-      const candidateCategory = getQuestionCategory(candidate);
-      const correctGroup = getQuestionGroup(correctItem);
-      const candidateGroup = getQuestionGroup(candidate);
-
-      let score = 0;
-
-      if (candidateGroup === correctGroup) score += 10000;
-      if (candidateCategory === correctCategory) score += 3000;
-      if (correctItem.genreId && candidate.genreId === correctItem.genreId) score += 1000;
-      if (getAnswerType(correctItem) === getAnswerType(candidate)) score += 500;
-
-      const correctAnswer = String(correctItem.meaning || '');
-      const candidateAnswer = String(candidate.meaning || '');
-      const correctWord = String(correctItem.word || '');
-      const candidateWord = String(candidate.word || '');
-
-      score -= Math.abs(correctAnswer.length - candidateAnswer.length) * 8;
-      score -= Math.abs(correctWord.length - candidateWord.length) * 2;
-
-      const keywords = ['血液','血球','元素','化学式','イオン','電流','電圧','速さ','地震','火山','植物','細胞','県庁所在地','首都','都道府県','方程式','関数','確率','微分','積分','ことわざ','四字熟語'];
-      keywords.forEach(k => {
-        if (correctWord.includes(k) && candidateWord.includes(k)) score += 700;
-      });
-
-      return score;
-    }
+    
 
 
     function generateOptions(correctItem, allCurrentWords) {
-      let candidates = allCurrentWords
-        .filter(item => item.word !== correctItem.word)
-        .filter(item => item.meaning !== correctItem.meaning);
+      const fullPool = Array.isArray(CURRENT_OPTION_POOL) && CURRENT_OPTION_POOL.length
+        ? CURRENT_OPTION_POOL
+        : allCurrentWords;
 
-      const correctGroup = getQuestionGroup(correctItem);
-      const correctCategory = getQuestionCategory(correctItem);
+      const normalizedCorrect = correctItem.group
+        ? correctItem
+        : normalizeQuestionMeta(correctItem, correctItem.genreId || genre);
 
-      let pool = candidates.filter(item => getQuestionGroup(item) === correctGroup);
+      let candidates = fullPool
+        .filter(item => item.word !== normalizedCorrect.word)
+        .filter(item => item.meaning !== normalizedCorrect.meaning);
 
+      const strictTypes = new Set([
+        'year',
+        'element_symbol',
+        'chemical_formula_or_name',
+        'ion',
+        'rock_term',
+        'blood_term',
+        'city',
+        'prefecture',
+        'number',
+        'number_unit',
+        'math_expression'
+      ]);
+
+      // 年代・元素記号・岩石・都市・数式などは、まず答えの型を絶対にそろえる
+      if (strictTypes.has(normalizedCorrect.answerType)) {
+        const sameType = candidates.filter(item => item.answerType === normalizedCorrect.answerType);
+        if (sameType.length >= 2) {
+          candidates = sameType;
+        }
+      }
+
+      // 1. 同じ group
+      let pool = candidates.filter(item => item.group === normalizedCorrect.group);
+
+      // 2. 同じ answerType + category
       if (pool.length < 2) {
-        pool = candidates.filter(item => getQuestionCategory(item) === correctCategory);
+        pool = candidates.filter(item =>
+          item.category === normalizedCorrect.category &&
+          item.answerType === normalizedCorrect.answerType
+        );
       }
 
-      if (pool.length < 2 && correctItem.genreId) {
-        pool = candidates.filter(item => item.genreId === correctItem.genreId);
+      // 3. 同じ answerType
+      if (pool.length < 2) {
+        pool = candidates.filter(item => item.answerType === normalizedCorrect.answerType);
       }
 
+      // 4. 同じ category
+      if (pool.length < 2) {
+        pool = candidates.filter(item => item.category === normalizedCorrect.category);
+      }
+
+      // 5. 同じ genre
+      if (pool.length < 2) {
+        pool = candidates.filter(item => item.genreId === normalizedCorrect.genreId);
+      }
+
+      // 6. 最後の保険
       if (pool.length < 2) {
         pool = candidates;
       }
 
       pool.forEach(item => {
-        item._relatedScore = getRelatedScore(correctItem, item);
+        item._relatedScore = getRelatedScore(normalizedCorrect, item);
       });
 
       pool.sort((a, b) => b._relatedScore - a._relatedScore);
 
-      const topPool = pool.slice(0, Math.min(12, pool.length)).sort(() => Math.random() - 0.5);
+      const topPool = pool.slice(0, Math.min(10, pool.length)).sort(() => Math.random() - 0.5);
       let dummies = topPool.slice(0, 2);
 
       if (dummies.length < 2) {
-        const usedMeanings = new Set([correctItem.meaning, ...dummies.map(item => item.meaning)]);
+        const usedMeanings = new Set([normalizedCorrect.meaning, ...dummies.map(item => item.meaning)]);
         const fallback = candidates
           .filter(item => !usedMeanings.has(item.meaning))
-          .sort((a, b) => getRelatedScore(correctItem, b) - getRelatedScore(correctItem, a));
+          .sort((a, b) => getRelatedScore(normalizedCorrect, b) - getRelatedScore(normalizedCorrect, a));
         dummies = [...dummies, ...fallback.slice(0, 2 - dummies.length)];
       }
 
-      const options = [correctItem, ...dummies].map(item => item.meaning);
+      const options = [normalizedCorrect, ...dummies].map(item => item.meaning);
       return options.sort(() => Math.random() - 0.5);
     }
 
